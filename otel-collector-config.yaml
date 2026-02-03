@@ -1,0 +1,108 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor for better performance
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  # Tail sampling processor - samples based on trace outcome
+  tail_sampling:
+    # Wait time to receive all spans of a trace before making sampling decision
+    decision_wait: 10s
+    # Maximum number of traces kept in memory
+    num_traces: 100000
+    # Expected rate of new traces per second
+    expected_new_traces_per_sec: 100
+    # Policy evaluation configuration
+    policies:
+      # Policy 1: Keep ALL traces with errors (status code ERROR)
+      - name: error-traces
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # Policy 2: Keep ALL traces with high latency (>5 seconds)
+      - name: slow-traces
+        type: latency
+        latency:
+          threshold_ms: 5000
+
+      # Policy 3: Sample 10% of successful/normal traces
+      - name: probabilistic-sample
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+      # Policy 4: Always sample if specific attributes exist (e.g., important service)
+      # Uncomment and customize as needed
+      # - name: important-service
+      #   type: string_attribute
+      #   string_attribute:
+      #     key: service.name
+      #     values:
+      #       - critical-service
+      #       - payment-service
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 2048
+    spike_limit_mib: 512
+
+exporters:
+  # Azure Application Insights (using OTLP)
+  # Set APPLICATIONINSIGHTS_CONNECTION_STRING environment variable
+  otlp/azuremonitor:
+    endpoint: "${AZURE_MONITOR_ENDPOINT}"
+    headers:
+      # Connection string will be set via environment variable
+      # Format: InstrumentationKey=xxx;IngestionEndpoint=https://xxx.in.applicationinsights.azure.com/
+
+  # Logging exporter for debugging
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # Debug exporter (disable in production)
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  # Telemetry configuration for the collector itself
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [otlp/azuremonitor, logging]
+
+    # Optional: Metrics pipeline
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/azuremonitor, logging]
+
+    # Optional: Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/azuremonitor, logging]
+
+  # Extensions for health checks and zpages
+  extensions: []

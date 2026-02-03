@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  otel-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: otel-tail-sampling
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+      - "13133:13133" # Health check
+    environment:
+      # Azure Monitor configuration
+      - AZURE_MONITOR_ENDPOINT=${AZURE_MONITOR_ENDPOINT:-https://your-workspace.in.applicationinsights.azure.com/v2.1/track}
+      - APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    restart: unless-stopped
+    mem_limit: 2g
+    mem_reservation: 512m
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: Jaeger for local trace visualization
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14250:14250" # gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    profiles:
+      - dev
