@@ -58,13 +58,26 @@ processors:
     spike_limit_mib: 512
 
 exporters:
-  # Azure Application Insights (using OTLP)
-  # Set APPLICATIONINSIGHTS_CONNECTION_STRING environment variable
-  otlp/azuremonitor:
-    endpoint: "${AZURE_MONITOR_ENDPOINT}"
+  # Axiom OTLP exporter (HTTP)
+  otlphttp/axiom:
+    endpoint: "https://api.axiom.co"
     headers:
-      # Connection string will be set via environment variable
-      # Format: InstrumentationKey=xxx;IngestionEndpoint=https://xxx.in.applicationinsights.azure.com/
+      Authorization: "Bearer ${AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${AXIOM_DATASET}"
+    tls:
+      insecure: false
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Azure Application Insights (using OTLP) - Optional fallback
+  # Uncomment to also send to Azure
+  # otlp/azuremonitor:
+  #   endpoint: "${AZURE_MONITOR_ENDPOINT}"
+  #   headers:
 
   # Logging exporter for debugging
   logging:
@@ -72,11 +85,11 @@ exporters:
     sampling_initial: 5
     sampling_thereafter: 200
 
-  # Debug exporter (disable in production)
+  # Debug exporter for troubleshooting
   debug:
     verbosity: detailed
-    sampling_initial: 5
-    sampling_thereafter: 200
+    sampling_initial: 10
+    sampling_thereafter: 10
 
 service:
   # Telemetry configuration for the collector itself
@@ -86,23 +99,23 @@ service:
     metrics:
       address: 0.0.0.0:8888
 
+  # Extensions for health checks and zpages
+  extensions: []
+
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, tail_sampling, batch]
-      exporters: [otlp/azuremonitor, logging]
+      exporters: [otlphttp/axiom, logging, debug]
 
     # Optional: Metrics pipeline
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/azuremonitor, logging]
+      exporters: [otlphttp/axiom, logging]
 
     # Optional: Logs pipeline
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/azuremonitor, logging]
-
-  # Extensions for health checks and zpages
-  extensions: []
+      exporters: [otlphttp/axiom, logging]

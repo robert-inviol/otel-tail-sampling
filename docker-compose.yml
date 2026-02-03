@@ -12,7 +12,10 @@ services:
       - "8888:8888"   # Prometheus metrics
       - "13133:13133" # Health check
     environment:
-      # Azure Monitor configuration
+      # Axiom configuration
+      - AXIOM_API_TOKEN=${AXIOM_API_TOKEN}
+      - AXIOM_DATASET=${AXIOM_DATASET:-otel-traces}
+      # Azure Monitor configuration (optional)
       - AZURE_MONITOR_ENDPOINT=${AZURE_MONITOR_ENDPOINT:-https://your-workspace.in.applicationinsights.azure.com/v2.1/track}
       - APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}
     restart: unless-stopped
